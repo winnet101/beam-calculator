@@ -1,0 +1,12 @@
+{
+  "name": "beam-bending-learning-lab",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node --watch server.mjs",
+    "test": "node --test",
+    "check": "node --check app.js && node --check beam.js && node --check optimizer.js && node --check grid-search.js && node --check server.mjs"
+  }
+}

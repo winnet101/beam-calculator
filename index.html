@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#182522">
+  <title>Beam bending learning lab</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <main>
+    <header class="masthead">
+      <div><p class="eyebrow">Beam bending learning lab / AME 101</p><h1>Closed-form calculator<br>and voxel estimate<span>.</span></h1></div>
+      <div class="header-actions"><button id="assignment">Load rail assignment</button><button id="reset" class="quiet">Reset</button><button id="print" class="quiet">Print / PDF ↗</button></div>
+    </header>
+    <nav id="cases" aria-label="Beam support and load case"></nav>
+    <div id="error" role="alert" hidden></div>
+    <div class="workspace">
+      <section class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">Linearized theory</p><h2>Euler–Bernoulli formula</h2></div><span class="badge" id="boundary-badge"></span></div>
+        <div class="panel-body">
+          <div class="section-controls"><label>Cross-section<select id="section"><option value="ibeam">I-beam · rail assignment</option><option value="rectangle">Solid rectangle</option></select></label><label>Load input<select id="loadMode"><option value="total">Total force F · kN</option><option value="line">Line load q · kN/m</option></select></label></div>
+          <div class="controls" id="geometry-controls"></div>
+          <div class="section-preview"><svg id="section-svg" viewBox="0 0 180 120" role="img" aria-label="Cross-section dimensions"></svg><div><p id="section-formula"></p><p id="area-mass"></p><p id="load-note"></p></div></div>
+          <label class="checkbox"><input id="custom" type="checkbox"> Use custom cross-section moment of inertia</label>
+          <label id="custom-field" class="custom-field" hidden>Custom I <span>mm⁴</span><input id="customI" type="number" min="1" step="1000000"></label>
+          <div id="formula" class="formula"></div><div id="boundary-note" class="note"></div>
+          <dl id="theory-results" class="results"></dl>
+          <details><summary>Calculation with units</summary><div id="substitution" class="calculation"></div></details>
+          <div id="warnings" class="warnings"></div>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">Section-voxelized beam FE estimate</p><h2>Timoshenko beam solve</h2></div><span class="badge" id="voxel-count"></span></div>
+        <div class="visualization"><canvas id="beam" aria-label="Deformed beam with signed equivalent stress coloring"></canvas><div class="viz-caption"><span>Elevation · geometry drawn to scale</span><label>Deformation <select id="magnify"><option value="auto">Auto</option><option value="1">1×</option><option value="10">10×</option><option value="100">100×</option><option value="1000">1000×</option></select></label></div><div class="legend-title"><strong>Signed von Mises estimate</strong><span>sign(σ) √(σ² + 3τ²)</span></div><div class="gradient"></div><div class="legend-labels"><span id="stress-blue"></span><span>0 MPa</span><span id="stress-red"></span></div></div>
+        <div id="mesh-controls" class="mesh-controls"></div>
+        <div class="panel-body"><dl id="fe-results" class="results"></dl><p class="model-note">A 1-D, two-node Timoshenko finite-element solve with a voxel-integrated section, not a 3-D solid/lattice FEA. Colors recover beam stress, not local flange, bearing, or support stress. Does not replace the assignment’s Onshape simulation.</p><details><summary>Model & shear assumptions</summary><p id="model-details"></p></details></div>
+      </section>
+    </div>
+    <section class="panel assignment-panel">
+      <div class="panel-heading"><div><p class="eyebrow">High-speed rail / design challenge</p><h2>Check the brief, then confirm in Onshape</h2></div><span class="badge">Stainless Steel 304</span></div>
+      <div class="assignment-body"><div><div id="checks" class="checks"></div><p class="model-note">Brief: F = 57.8 kN total, uniformly distributed on the top flange, fixed–free. E = 193 GPa, ρ = 8000 kg/m³. Self-weight is excluded, matching the supplied equations. Material and FEA results must be verified in Onshape.</p></div><div><label class="fea-label">Onshape maximum displacement <span>mm</span><input id="onshape" type="number" min="0" step="0.001" placeholder="Enter actual FEA result"></label><p id="confirmation" class="note"></p><button id="record">+ Record geometry & result</button><p class="model-note">Record at least three geometries (L/a ≈ 5, 10, 15+). FEA values are entered by you, never synthesized.</p></div></div>
+    </section>
+    <section class="panel optimizer-panel">
+      <div class="panel-heading"><div><p class="eyebrow">Part 2 / minimum-mass candidate</p><h2>Minimum-mass design solver</h2></div><span class="badge">Theory sizing · FEA still required</span></div>
+      <div class="panel-body">
+        <p class="model-note">Minimize m = ρ A L under the brief’s bounds: L ≥ 12 m, a ≤ 1000 mm, τ ≥ 8 mm, and predicted droop ≤ 40 mm. Uses your current E, ν and density; confirm these match Stainless Steel 304. The solver resets the load to 57.8 kN total, the case to uniform cantilever, and the section to a geometric I-beam.</p>
+        <div class="optimizer-controls"><label>Search method<select id="optimizer-method"><option value="gradient">Multi-start gradient descent</option><option value="grid" selected>Exhaustive discrete grid search</option></select></label><label>Sizing model<select id="optimizer-model"><option value="timoshenko">Timoshenko · includes approximate web shear</option><option value="eb">Euler–Bernoulli · PDF equations</option></select></label><label>Deflection margin below 40 mm <span>%</span><input id="optimizer-margin" type="number" min="0" max="90" step="1" value="10"></label><button id="optimize">Find lightweight candidate ↓</button><button id="cancel-search" hidden>Cancel search</button></div>
+        <div id="grid-settings"><div class="grid-settings-fields"><label>Height step Δa (mm)<input id="grid-a-step" type="number" min="0.1" max="1000" step="0.1" value="10"></label><label>Thickness step Δτ (mm)<input id="grid-t-step" type="number" min="0.1" max="492" step="0.1" value="1"></label><label>Width step Δb (mm)<input id="grid-b-step" type="number" min="0.1" max="100000" step="0.1" value="1"></label><label>Optional width cap (mm)<input id="grid-b-max" type="number" min="1" max="100000" step="1" placeholder="No brief cap"></label></div><p class="model-note">Tests every a = Δa, 2Δa, … up to 1000 mm (also includes 1000 if off-grid), and τ = 8, 8+Δτ, … below 500 mm, rejecting a ≤ 2τ. Widths are multiples of Δb with b ≥ τ. For each pair, the lightest feasible width is found exactly; wider choices cannot improve mass. The PDF has no width cap; blank uses this calculator’s 100,000 mm numerical ceiling. Maximum 1,000,000 a/τ pairs. Uses strict predicted droop &lt; target; set margin to 0 to search below 40 mm.</p></div>
+        <p id="optimizer-status" class="note" role="status">Ready. A 10% margin targets 36 mm in the selected model; it does not guarantee Onshape will be below 40 mm.</p>
+        <div id="optimizer-output" hidden><dl id="optimizer-results" class="results"></dl><canvas id="optimizer-history" aria-label="Mass versus gradient-descent iteration for every starting point; best start is highlighted"></canvas><p id="optimizer-chart-caption" class="model-note"></p><h3 id="optimizer-visualizer-heading" class="iteration-heading">Cross-sections by starting point</h3><p id="optimizer-visualizer-note" class="model-note">Expand a start to inspect its beam at every iteration. Within a start, diagrams share a scale so changes in height, width and thickness are comparable. The first card is the initial design; a dashed final card means the last line search made no move. Very thin walls may be hard to see at this scale; exact dimensions are printed below each diagram.</p><div id="optimizer-run-visualizers"></div><button id="apply-optimum">Apply candidate to calculator</button><p id="optimizer-caveat" class="model-note">Theory sizing only, not FEA confirmation. This does not account for local plate bending, bearing, buckling, self-weight or yielding. Validate the applied design and refine the mesh in Onshape.</p></div>
+        <details><summary>Why this optimization works</summary><div class="optimizer-explanation"><p><strong>I is stiffness geometry, not the applied moment M.</strong> For the uniform cantilever, Mmax = F L/2 and δ = F L³/(8 E I). Raising I reduces displacement. Changing a, b or τ does not change M for this fixed external load and span.</p><p>At constant total F, a longer beam has greater mass and greater bending and shear droop. Therefore the best allowed span is L = 12 m. For each trial height and thickness, I is linear in flange width: I = b[a³ − (a−2τ)³]/12 + τ(a−2τ)³/12. We solve for the smallest b that meets the selected droop target (and b ≥ τ), then either test every height/thickness pair on a finite grid or descend in those two scaled variables. Grid search rounds width upward to the next allowed grid value and verifies strict feasibility; this is equivalent to a full three-dimensional grid for finding minimum mass, because all wider feasible sections for the same height/thickness weigh more.</p><p>Finite-difference gradients, projected bounds, and backtracking line search reduce mass. Ten starts, including your current geometry, help with local minima. In Timoshenko mode the shear contribution is deducted from the deflection allowance before solving for width. If shear alone exceeds the target, that trial cannot be made feasible just by widening flanges.</p><p>Height often buys the most I per added kilogram because it moves both flanges farther from the neutral axis. But “a is cubed” is not the whole argument: the hollow-section subtraction also changes. The relevant comparison is (∂I/∂x)/(∂m/∂x), holding other dimensions fixed. These local marginal efficiencies depend on the current geometry, and are not a global optimization proof. Once height reaches 1000 mm, further increases are forbidden by C4.</p><div id="inertia-efficiency" class="formula"></div></div></details>
+      </div>
+    </section>
+    <section class="panel comparisons">
+      <div class="panel-heading"><div><p class="eyebrow">Theory vs simulation</p><h2>Geometry study</h2></div><div class="actions"><button id="export">Export CSV</button><button id="clear" class="quiet">Clear study</button></div></div>
+      <div class="panel-body"><p id="empty-study" class="model-note">No recorded geometries yet. Change dimensions, enter an optional Onshape result, and record each run.</p><canvas id="study" aria-label="Recorded deflections versus beam slenderness L over a" hidden></canvas><div class="table-scroll"><table id="study-table" hidden><thead><tr><th>Case / section</th><th>L/a</th><th>a / b / τ (mm)</th><th>L (m)</th><th>I (mm⁴)</th><th>Mass (kg)</th><th>EB (mm)</th><th>Beam FE (mm)</th><th>Onshape (mm)</th><th>FEA − EB</th><th></th></tr></thead><tbody></tbody></table></div></div>
+    </section>
+    <footer><span>Small-strain, linear-elastic, prismatic beams. Educational analysis, not a structural safety certification.</span><span>Based on document1.pdf · AME 101 Lab HW #2</span></footer>
+  </main>
+</body>
+</html>
