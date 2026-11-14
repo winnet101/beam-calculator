@@ -32,8 +32,8 @@ npm run check  # JavaScript syntax checks
 - Geometric or custom inertia, area, mass, bending moment, extreme-fiber stress, displacement, slenderness, and small-deflection warnings.
 - Live finite-element estimate with voxel-integrated section properties, deformed elevation, signed equivalent stress coloring, and adjustable mesh and deformation scale.
 - Rail assignment preset and C1–C4 checks. The starting I-beam is a demonstration, **not a claimed optimum or FEA-certified design**.
-- Part 2 minimum-mass sizing using exhaustive discrete grid search (default) or multi-start projected gradient descent, selectable EB/Timoshenko constraints, deflection margin, convergence history, local inertia-per-kilogram sensitivities, and explicit candidate application.
-- Enter actual Onshape displacement, record geometries, compare EB / beam FE / Onshape on a scatter plot, export CSV, and print to PDF. Actual FEA entry is cleared whenever model inputs change to prevent attaching a result to a different model.
+- Part 2 minimum-mass sizing using exhaustive discrete grid search (default) or multi-start projected gradient descent, assignment-focused Euler–Bernoulli constraints, deflection margin, convergence history, local inertia-per-kilogram sensitivities, and explicit candidate application.
+- Enter actual Onshape displacement, record geometries, compare Euler–Bernoulli / Onshape on the assignment scatter plot, export CSV, and print to PDF. Actual FEA entry is cleared whenever model inputs change to prevent attaching a result to a different model.
 - Parameters and up to 100 geometry records are saved in browser local storage. If storage is unavailable, the calculator still works. Reset changes current inputs, not the saved study; Clear study deletes records after confirmation.
 - Responsive layout, labeled keyboard-accessible inputs, and print styles with formulas and substitutions.
 
@@ -43,7 +43,7 @@ For Problem 1, record at least three geometries at different L/a values, enterin
 
 ## Part 2 minimum-mass solver
 
-Choose **Euler–Bernoulli** to size to the PDF equations, or **Timoshenko** to include the approximate clear-web shear contribution. The default 10% margin targets 36 mm rather than the 40 mm limit; this is a user-selected analytic margin, not an FEA error calibration or guarantee. The solver uses the current E, ν, and density, but resets section, load case, total force, and custom inertia to the assignment configuration. The result displays the material properties actually used. Changing current inputs afterward does not alter an already computed candidate; applying that candidate restores its displayed material values too.
+The default **Assignment · Euler–Bernoulli** tab contains the PDF calculations, geometry study, and solver. The solver uses Euler–Bernoulli only. The graph, table and CSV compare only EB and actual user-entered Onshape results; stored historical FE values are preserved internally but excluded from the graph and its axis scaling. **Timoshenko · optional** is a separate tab for the shear-flexible beam visualization, mesh controls and numerical results, sharing geometry/material/load inputs with the assignment. Both tabs support keyboard navigation, and printing includes only the active tab. The numerical search library retains both model options for tests and programmatic use, but Timoshenko is not exposed as an assignment sizing option. The default 10% margin targets 36 mm rather than the 40 mm limit; this is a user-selected analytic margin, not an FEA error calibration or guarantee. The solver uses the current E, ν, and density, but resets section, load case, total force, and custom inertia to the assignment configuration. The result displays the material properties actually used. Changing current inputs afterward does not alter an already computed candidate; applying that candidate restores its displayed material values too.
 
 ### Exhaustive discrete grid (`grid-search.js`, default)
 
@@ -60,7 +60,7 @@ This reduction is equivalent to testing all grid widths **for minimum mass**: at
 
 Default steps (Δa = 10 mm, Δτ = 1 mm, Δb = 1 mm) check all **49,200 a/τ pairs**, including those rejected by geometry. Results separately report geometric and feasible pair counts. Up to 1,000,000 pairs are allowed; oversized grids are rejected before allocation. The search yields periodically for progress updates and cancellation. A cancelled search never applies or displays a partial candidate. The graph shows best feasible mass so far versus pairs checked. Expand the ranked candidate rows for proportional beam diagrams, exact dimensions, mass and droop.
 
-The result is the **minimum on the defined finite grid under the selected analytic model**, not a guarantee between grid points or in Onshape. A finer nested grid can improve precision. These discrete-grid guarantees must not be confused with material verification, structural safety or FEA confirmation. With the above default steps, E = 193 GPa, ν = 0.29, ρ = 7850 kg/m³, and the default 10% Timoshenko margin, the minimum is a = 1000, b = 305, τ = 8 mm, mass ≈ 1201.24 kg, predicted droop ≈ 35.9445 mm.
+The result is the **minimum on the defined finite grid under the selected analytic model**, not a guarantee between grid points or in Onshape. A finer nested grid can improve precision. These discrete-grid guarantees must not be confused with material verification, structural safety or FEA confirmation. With the above default steps, E = 193 GPa, ν = 0.29, ρ = 7850 kg/m³, and the default 10% Euler–Bernoulli margin, the minimum is a = 1000, b = 296, τ = 8 mm, mass ≈ 1187.67 kg, predicted droop ≈ 35.9312 mm.
 
 ### Multi-start gradient descent (`optimizer.js`)
 
@@ -73,7 +73,7 @@ Algorithm:
 
 This is a bounded local optimization heuristic, **not proof of a global minimum**. The convergence graph plots mass against iteration for every feasible start, with the winning run highlighted. Each starting point has its own expandable visualizer with an I-beam cross-section card for every iteration, including the initial geometry and any terminal no-move attempt. Cross-sections preserve height, width, and thickness proportions and use one drawing scale per start, so geometry changes are directly comparable within that run. Exact a/b/τ values and mass appear under each beam; very thin walls may be difficult to see at a shared scale. Expand a run's numerical diagnostics for its a/b/τ, mass, scaled gradient norm, step size, search attempts, and cumulative evaluation count at each iteration. A dashed card marks a terminal no-move iteration. The separate dimension line graphs have been removed. Iterations include rejected/terminal line-search attempts, so they are not the same as accepted updates. A projected-step or line-search stop is reported explicitly; it is not an optimality certificate. Section-voxel FE displacement may be slightly higher than the continuum Timoshenko sizing value because of sectional quadrature.
 
-For E = 193 GPa, ν = 0.29, ρ = 7850 kg/m³:
+Reference results from the numerical engine for E = 193 GPa, ν = 0.29, ρ = 7850 kg/m³ (Timoshenko sizing remains available programmatically, not in the assignment UI):
 
 | Sizing | Margin | a / b / τ (mm) | Mass (kg) | EB droop (mm) | Timoshenko droop (mm) |
 |---|---:|---|---:|---:|---:|

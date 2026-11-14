@@ -16,6 +16,25 @@ try {
 } catch { p = { ...DEFAULTS }; }
 const save = () => { try { localStorage.setItem(storageKey, JSON.stringify({ p, records })); } catch { /* Calculator works without storage. */ } };
 
+function activateView(name, focus = false) {
+  for (const key of ['assignment','timoshenko']) {
+    const active = key === name, tab = $(`${key}-tab`);
+    tab.setAttribute('aria-selected', String(active));
+    tab.tabIndex = active ? 0 : -1;
+    $(`${key}-view`).hidden = !active;
+  }
+  if (focus) $(`${name}-tab`).focus();
+  requestAnimationFrame(() => { drawBeam(); drawStudy(); drawOptimizerHistory(); });
+}
+for (const key of ['assignment','timoshenko']) {
+  $(`${key}-tab`).addEventListener('click', () => activateView(key));
+  $(`${key}-tab`).addEventListener('keydown', event => {
+    if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+    event.preventDefault();
+    activateView(event.key === 'Home' ? 'assignment' : event.key === 'End' ? 'timoshenko' : key === 'assignment' ? 'timoshenko' : 'assignment', true);
+  });
+}
+
 const geometrySpecs = [
   ['L', 'Length', 'm', 0.2, 30, 0.1], ['b', 'Width b', 'mm', 10, 1000, 1],
   ['a', 'Height a', 'mm', 20, 1500, 1], ['t', 'Thickness τ', 'mm', 1, 100, 0.5],
@@ -105,11 +124,10 @@ function update() {
   $('substitution').innerHTML = `<p>${p.section === 'ibeam' ? `I = [(${p.b} mm)(${p.a} mm)³ − (${p.b} − ${p.t}) mm × (${p.a} − 2 × ${p.t})³ mm³] / 12` : `I = (${p.b} mm)(${p.a} mm)³ / 12`} = ${sci(s.geometricI*1e12)} mm⁴${p.custom ? `<br>Using custom I = ${sci(s.I*1e12)} mm⁴ instead.` : ''}</p><p>A = ${p.section === 'ibeam' ? `2(${p.b})(${p.t}) + (${p.a} − 2 × ${p.t})(${p.t})` : `${p.b} × ${p.a}`} mm² = ${fmt(s.A*1e6)} mm²</p><p>m = ρ A L = (${p.rho} kg/m³)(${sci(s.A)} m²)(${p.L} m) = ${fmt(s.mass)} kg</p><p>${c.uniform ? `q = F/L = (${fmt(F)} N)/(${p.L} m) = ${fmt(q)} N/m<br>` : ''}${c.formula}<br>${substitute(p, s, F, q)} = ${sci(eb.delta)} m = ${fmt(eb.delta*1000)} mm</p>`;
   $('model-details').textContent = `The length is divided into ${p.nx} shear-flexible beam elements, with transverse displacement and rotation at each node. Cross-section cells are clipped to the actual shape, conserving area; centroid quadrature of their second moments converges to geometric I. Width cells do not create additional bending DOFs. ${p.section === 'rectangle' ? 'Solid rectangle: κ = 10(1+ν)/(12+11ν), Cowper shear coefficient.' : 'I-section: effective shear area ≈ (5/6)(a−2τ)τ, an engineering web-only approximation, not Cowper’s solid-rectangle formula.'} Shear deformation and voxel quadrature both contribute to the difference from Euler–Bernoulli. Refining length does not turn this into a 3-D solid model. Stress uses bending plus approximate parabolic rectangular / uniform-web shear. Custom I overrides stiffness and bending stress only; area and mass still follow the chosen shape.`;
   const warnings = [];
-  if (p.L/s.a < 10) warnings.push('Short/deep beam: shear deformation and local support/load effects can make Euler–Bernoulli theory inaccurate. The beam FE estimate also omits 3-D effects.');
+  if (p.L/s.a < 10) warnings.push('Short/deep beam: shear deformation and local support/load effects can make Euler–Bernoulli theory inaccurate. Euler–Bernoulli theory does not capture local section distortion.');
   if (eb.ratio > 0.02) warnings.push('Displacement exceeds 2% of span. Small-deflection linear theory may no longer apply; use geometric-nonlinear FEA.');
   if (eb.stress > 205e6) warnings.push('Bending stress exceeds a nominal 205 MPa reference for annealed 304. Actual yield varies; this is not a strength, buckling, or safety check.');
   if (p.custom) warnings.push('Custom I is active. Assignment geometry checks cannot be confirmed using an overridden inertia.');
-  if ((s.geometricI-voxel.I)/s.geometricI > 0.02) warnings.push('Section grid stiffness differs from geometric I by more than 2%. Increase height voxels for a convergence check.');
   $('warnings').innerHTML = warnings.map(w => `<p>${w}</p>`).join('');
   drawSection(); drawBeam(); updateChecks();
   const efficiency = inertiaEfficiency(p);
@@ -138,7 +156,7 @@ function color(stress, peak) {
   return `rgb(${neutral.map((n,i) => Math.round(n+(extreme[i]-n)*t)).join(',')})`;
 }
 function drawBeam() {
-  if (!result) return;
+  if (!result || $('timoshenko-view').hidden) return;
   const { ctx, w, h } = canvasContext($('beam')), { section:s, fe, peak } = result;
   if (!w) return;
   ctx.clearRect(0,0,w,h);
@@ -217,32 +235,32 @@ $('clear').addEventListener('click', () => { if (records.length && !confirm('Cle
 function renderStudy() {
   $('empty-study').hidden = records.length>0;
   $('study-table').hidden = !records.length; $('study').hidden = !records.length;
-  $('study-table').querySelector('tbody').innerHTML = records.map((r,i) => `<tr><td>${esc(CASES[r.p.case]?.name || r.p.case)} / ${esc(r.p.section)}</td><td>${fmt(r.slenderness,2)}</td><td>${fmt(r.p.a)} / ${fmt(r.p.b)} / ${r.p.section === 'ibeam' ? fmt(r.p.t) : '—'}</td><td>${fmt(r.p.L)}</td><td>${sci(r.I)}</td><td>${fmt(r.mass,1)}</td><td>${fmt(r.eb)}</td><td>${fmt(r.fe)}</td><td>${r.onshape === null ? 'pending' : fmt(r.onshape)}</td><td>${r.onshape === null ? '—' : fmt((r.onshape/r.eb-1)*100,2)+'%'}</td><td><button aria-label="Remove recorded geometry ${i+1}" data-remove="${i}">×</button></td></tr>`).join('');
+  $('study-table').querySelector('tbody').innerHTML = records.map((r,i) => `<tr><td>${esc(CASES[r.p.case]?.name || r.p.case)} / ${esc(r.p.section)}</td><td>${fmt(r.slenderness,2)}</td><td>${fmt(r.p.a)} / ${fmt(r.p.b)} / ${r.p.section === 'ibeam' ? fmt(r.p.t) : '—'}</td><td>${fmt(r.p.L)}</td><td>${sci(r.I)}</td><td>${fmt(r.mass,1)}</td><td>${fmt(r.eb)}</td><td>${r.onshape === null ? 'pending' : fmt(r.onshape)}</td><td>${r.onshape === null ? '—' : fmt((r.onshape/r.eb-1)*100,2)+'%'}</td><td><button aria-label="Remove recorded geometry ${i+1}" data-remove="${i}">×</button></td></tr>`).join('');
   drawStudy();
 }
 $('study-table').addEventListener('click',e => { const button=e.target.closest('[data-remove]');if(button){records.splice(Number(button.dataset.remove),1);save();renderStudy();} });
 function drawStudy() {
-  if (!records.length) return;
+  if (!records.length || $('assignment-view').hidden) return;
   const {ctx,w,h} = canvasContext($('study')), left=60,right=w-25,top=30,bottom=h-40;
   const xmax=Math.max(...records.map(r=>r.slenderness))*1.1 || 1;
-  const ymax=Math.max(...records.flatMap(r=>[r.eb,r.fe,r.onshape||0]))*1.15 || 1;
+  const ymax=Math.max(...records.flatMap(r=>[r.eb,r.onshape||0]))*1.15 || 1;
   const x=v=>left+v/xmax*(right-left),y=v=>bottom-v/ymax*(bottom-top);
   ctx.font='10px system-ui';ctx.strokeStyle='#d6e0da';ctx.fillStyle='#60756a';
   for(let i=0;i<=4;i++) { const value=ymax*i/4;ctx.beginPath();ctx.moveTo(left,y(value));ctx.lineTo(right,y(value));ctx.stroke();ctx.textAlign='right';ctx.fillText(fmt(value,1),left-8,y(value)+3);ctx.textAlign='center';ctx.fillText(fmt(xmax*i/4,1),x(xmax*i/4),bottom+16); }
   ctx.textAlign='left';ctx.fillText('Displacement (mm)',left,12);ctx.textAlign='right';ctx.fillText('L/a',right,bottom+32);
-  const series=[['eb','#236384','Euler–Bernoulli'],['fe','#bc8b3a','Beam FE'],['onshape','#b54b3b','Onshape']];
-  series.forEach(([key,color,label],j)=>{ctx.fillStyle=color;ctx.textAlign='left';const lx=left+j*(right-left)/3;ctx.fillRect(lx,h-8,7,7);ctx.fillText(w<500 && key==='eb' ? 'EB theory' : label,lx+12,h-1);for(const r of records){if(r[key]===null)continue;ctx.beginPath();ctx.arc(x(r.slenderness),y(r[key]),4,0,Math.PI*2);ctx.fill();}});
+  const series=[['eb','#236384','Euler–Bernoulli'],['onshape','#b54b3b','Onshape']];
+  series.forEach(([key,color,label],j)=>{ctx.fillStyle=color;ctx.textAlign='left';const lx=left+j*(right-left)/series.length;ctx.fillRect(lx,h-8,7,7);ctx.fillText(w<500 && key==='eb' ? 'EB theory' : label,lx+12,h-1);for(const r of records){if(r[key]===null)continue;ctx.beginPath();ctx.arc(x(r.slenderness),y(r[key]),4,0,Math.PI*2);ctx.fill();}});
 }
 $('export').addEventListener('click', () => {
   if (!records.length) { alert('Record at least one geometry before exporting.'); return; }
-  const header=['case','section','L_m','a_mm','b_mm','tau_mm','E_GPa','nu','rho_kg_m3','F_kN','custom_I','I_mm4','mass_kg','L_over_a','EB_mm','beam_FE_mm','Onshape_mm','Onshape_error_percent','nx','ny','nz'];
-  const data=records.map(r=>[r.p.case,r.p.section,r.p.L,r.p.a,r.p.b,r.p.section==='ibeam'?r.p.t:'',r.p.E,r.p.nu,r.p.rho,loads(r.p).F/1000,r.p.custom,r.I,r.mass,r.slenderness,r.eb,r.fe,r.onshape??'',r.onshape===null?'':(r.onshape/r.eb-1)*100,r.p.nx,r.p.ny,r.p.nz]);
+  const header=['case','section','L_m','a_mm','b_mm','tau_mm','E_GPa','nu','rho_kg_m3','F_kN','custom_I','I_mm4','mass_kg','L_over_a','EB_mm','Onshape_mm','Onshape_error_percent','nx','ny','nz'];
+  const data=records.map(r=>[r.p.case,r.p.section,r.p.L,r.p.a,r.p.b,r.p.section==='ibeam'?r.p.t:'',r.p.E,r.p.nu,r.p.rho,loads(r.p).F/1000,r.p.custom,r.I,r.mass,r.slenderness,r.eb,r.onshape??'',r.onshape===null?'':(r.onshape/r.eb-1)*100,r.p.nx,r.p.ny,r.p.nz]);
   const csv=[header,...data].map(row=>row.map(v=>`"${String(v).replaceAll('"','""')}"`).join(',')).join('\r\n');
   const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='beam-geometry-study.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 });
 let optimization = null;
 function drawOptimizerHistory() {
-  if (!optimization || $('optimizer-output').hidden) return;
+  if (!optimization || $('optimizer-output').hidden || $('assignment-view').hidden) return;
   const { ctx,w,h } = canvasContext($('optimizer-history'));
   const grid=optimization.algorithm==='grid';
   const runs=grid ? [{start:1,trace:optimization.gridHistory.filter(point=>point.bestMass!==null).map(point=>({iteration:point.checked,mass:point.bestMass}))}] : optimization.runs.filter(run=>run.feasible);
@@ -316,13 +334,12 @@ $('optimize').addEventListener('click', async () => {
       ['Material inputs used',`E ${fmt(r.p.E)} GPa · ν ${fmt(r.p.nu)} · ρ ${fmt(r.p.rho)} kg/m³`],
       ['Geometric I',`${sci(r.I*1e12)} mm⁴`],
       ['Euler–Bernoulli droop',`${fmt(r.eb)} mm`],
-      ['Continuum Timoshenko droop',`${fmt(r.timoshenko)} mm`],
       ['Selected-model target',`${r.algorithm==='grid'?'<':'≤'} ${fmt(r.targetMM)} mm (${fmt(r.margin)}% margin)`],
       ['Search effort',r.algorithm==='grid'?`${fmt(r.checked,0)} / ${fmt(r.total,0)} grid pairs · ${fmt(r.feasible,0)} feasible`: `${r.runs.filter(run=>run.feasible).length}/${r.starts} feasible starts · ${r.iterations} iterations · ${r.accepted} accepted steps · ${r.evaluations} evaluations · best start ${r.bestStart}`]
     ]);
     $('optimizer-output').hidden=false;
     renderOptimizerDiagnostics(r);
-    $('optimizer-status').textContent=`Candidate found using ${r.model==='eb'?'Euler–Bernoulli':'continuum Timoshenko'}. ${r.status}. Not FEA-confirmed. Apply explicitly to replace the current model. The voxelized FE result may be slightly higher because of section quadrature.`;
+    $('optimizer-status').textContent=`Candidate found using ${r.model==='eb'?'Euler–Bernoulli':'continuum Timoshenko'}. ${r.status}. Not FEA-confirmed. Apply explicitly to replace the current model, then verify it in Onshape.`;
     $('optimizer-caveat').textContent=(r.algorithm==='grid'?'Minimum on the specified finite grid only; a finer grid may find a lighter design.':'Multi-start local search, not a certified global optimum. Dimensions rounded to 0.1 mm with width re-sized upward.')+' Both methods omit local plate bending, bearing, buckling, self-weight and yielding. Onshape FEA confirmation is required.';
     drawOptimizerHistory();
   } catch(e) { $('optimizer-status').textContent=e.message; }
@@ -334,7 +351,7 @@ $('apply-optimum').addEventListener('click',()=>{
   $('optimizer-status').textContent='Candidate applied. Enter the matching Onshape FEA result after testing it; the solver has not confirmed C2 or C3.';
   $('theory-results').scrollIntoView({behavior:'smooth',block:'center'});
 });
-new ResizeObserver(() => { drawBeam();drawStudy();drawOptimizerHistory(); }).observe(document.querySelector('.workspace'));
+new ResizeObserver(() => { drawBeam();drawStudy();drawOptimizerHistory(); }).observe(document.querySelector('main'));
 let closedDetails = [];
 window.addEventListener('beforeprint',()=>{
   closedDetails = [...document.querySelectorAll('details:not([open])')];
